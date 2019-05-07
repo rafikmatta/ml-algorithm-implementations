@@ -1,0 +1,234 @@
+---
+title: "Lab 11 Implementation- DS8002"
+author: "Rafik Matta"
+output:
+  pdf_document: default
+  html_document: default
+  word_document: default
+---
+
+#Classification Tree Code 
+
+##Node Entropy Function as per equation 9.3
+```{r}
+node_entropy<- function(x)
+{
+   classes = unique(x$class)
+   majority_class = classes[1]
+   majority_class_length = 0
+   result = 0
+   N = length(x$class)
+   for(i in 1:length(classes))
+   {
+     Nm = length(subset(x, x$class == classes[i])$class)
+     if(Nm > majority_class_length)
+     {
+       majority_class_length = Nm
+       majority_class = classes[i]
+     }
+     pm = Nm/N
+     if(pm != 0)
+     {
+      result = result - pm*log2(pm)
+     }
+   }
+   return(c(result,majority_class))
+}
+```
+
+##Split Entropy Function as per Equation 9.8
+```{r}
+split_entropy<- function(list_of_splits,classes)
+{
+  result = 0
+  Nm = 0
+  num_of_splits = length(list_of_splits)
+  
+  #Nm is the values at all the node
+  for(i in 1:num_of_splits)
+  {
+    n = dim(list_of_splits[[i]])[1]
+    Nm = Nm + n
+  }
+  
+  for(j in 1:num_of_splits)
+  {
+     #Nmj is the number of values belonging to the split 
+     Nmj = dim(list_of_splits[[j]])[1]
+     if(Nmj > 0)
+     {
+       first_ent = 0
+       for(k in 1:length(classes))
+       {
+         Nmji = length(subset(list_of_splits[[j]], list_of_splits[[j]]$class == classes[k])$class)
+         pmji = Nmji/Nmj
+         if(pmji != 0)
+         {
+           first_ent = first_ent + (pmji*log2(pmji))
+         }
+       }
+       result = result + (Nmj/Nm)*first_ent
+     }
+
+  }
+  return(-result)
+}
+```
+
+##Split attribute function as per Figure 9.3
+```{r}
+split_attribute <- function(x)
+{
+  min_ent = .Machine$double.xmax
+  best_feature = 0
+  d = dim(x)[2]-1 #one of the columns is "class", specifically for two class case
+  n = dim(x)[1]
+  class_column_index = grep('class',colnames(sample_data))
+  for(i in 1:d)
+  {
+    #only covering numeric case
+    list_of_unique_values = unique(x[,i])
+    for(j in list_of_unique_values)
+    {
+      x1 = subset(x, x[,i] <= j)
+      x2 = subset(x, x[,i] > j)
+      list_of_splits = list(x1,x2)
+      e = split_entropy(list_of_splits,unique(x$class))
+      
+      if(e<min_ent)
+      {
+        min_ent = e
+        best_feature = i
+        split_threshold = j
+      }
+    }
+    
+    
+  }
+  return(c(best_feature,split_threshold))
+}
+```
+
+#Generate Tree Recursive function
+
+```{r}
+generateTree <- function(x,theta,parent_node)
+{
+
+  if(length(x$class) == 0)
+  {
+    node_ent_val = 0
+  }
+  else
+  {
+    node_ent_val = node_entropy(x)
+  }
+  
+  if(node_ent_val[1] < theta)
+  {
+    class_num = as.character(node_ent_val[2])
+    class_val = paste("center",class_num,sep="")
+    print(c(parent_node, class_val))
+    return()
+  }
+   
+  split_out =  split_attribute(x)
+  
+  
+  chosen_attribute = split_out[1]
+  split_val = split_out[2]
+  
+  
+  curr_feature = as.character(chosen_attribute)
+  curr_feature = paste("x",curr_feature,sep="")
+  curr_val = as.character(split_val)
+
+  #since it's values only for our implementation, we will do two branches
+  list_of_classes = unique(x$class)
+  for(i in 1:2)
+  {
+    if(i == 1)
+    {
+      current_subset = subset(x, x[,chosen_attribute] > split_val)
+      curr_node = paste(curr_feature,curr_val,sep=">")
+      
+      if(dim(current_subset)[1]>0 && curr_node != parent_node)
+      {
+        print(c(parent_node,curr_node))
+        generateTree(current_subset,theta,curr_node)
+      }
+    }
+    else{
+      current_subset = subset(x, x[,chosen_attribute] <= split_val)
+      curr_node = paste(curr_feature,curr_val,sep="<=")
+      if(dim(current_subset)[1]>0 && curr_node != parent_node)
+      {
+        generateTree(current_subset,theta,curr_node)
+      }
+    }
+    
+  }
+  
+}
+
+``` 
+
+\newpage
+
+#Code Run 
+```{r}
+#set.seed(0)
+#generate values
+center1_x = 5
+center1_y = 10
+center1_x1 = runif(20,center1_x-5,center1_x+5)
+#center1_x1 = rep(1,20) - #good test case to see if all the values are the same what would happen 
+center1_x2 = runif(20,center1_y-5,center1_y+5)
+
+center2_x = 15
+center2_y = 20
+center2_x1 = runif(20,center2_x-5,center2_x+5)
+#center2_x1 = rep(1,20) - #good test case to see if all the values are the same what would happen 
+center2_x2 = runif(20,center2_y-5,center2_y+5)
+
+x1 = c(center1_x1,center2_x1)
+x2 = c(center1_x2,center2_x2)
+
+values = cbind(x1,x2)
+
+#generate class vecs
+c1 = rep("center1",20)
+c2 = rep("center2",20)
+c_vec = c(c1,c2)
+class = c_vec
+
+#create sample data dataframe
+sample_data = data.frame(values,class)
+
+#shuffle
+sample_data <- sample_data[sample(1:nrow(sample_data)), ]
+print(sample_data)
+
+#train data
+train_data = sample_data[1:35,]
+
+#test_data
+test_data = sample_data[36:40,]
+
+#generate first node
+print(c("parent_node","next_node"))
+
+#run generate tree to see out come
+generateTree(train_data,0.75,"root=0")
+```
+
+
+
+
+
+
+
+
+
+
+
